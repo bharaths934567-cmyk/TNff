@@ -210,4 +210,328 @@ A(["ஜனவரி – மார்ச்","அக்டோபர் – மா
 A(["ஜனவரி – பிப்ரவரி","அக்டோபர் – டிசம்பர்","ஜூன் – செப்டம்பர்","மார்ச் – மே"],[["குளிர்காலம்?",0],["கோடைக்காலம்?",3],["தென்மேற்குப் பருவக்காற்று காலம்?",2],["வடகிழக்குப் பருவக்காற்று காலம்?",1]]);
 A(["கரிசல் மண்","காதர்","வண்டல் மண்","பாங்கர்"],[["சிற்றோடைகள் மற்றும் ஆறுகளின் வேகம் குறையும் பொழுது படிய வைப்பதினால் உருவாகும் மண்?",2],["வெளிர் நிறமுடைய மணற்பாங்கான மண்?",1],["பழைய வண்டல் படிவுகள் மூலம் உருவாகும் மண்?",3],["தக்காணப் பகுதியில் உள்ள பசால்ட் பாறைகளிலிருந்து உருவாகும் மண்?",0]]);
 A(["சரளை மண்","காடு மற்றும் மலைமண்","வறண்ட பாலை மண்","செம்மண்"],[["பழமையான படிக பாறைகளான கிரானைட், நைஸ் சிதைவடைவதால் உருவாகும் மண்?",3],["இரும்பு மற்றும் அலுமினியத்தின் நீரேற்ற ஆக்சைடுகளால் உருவான மண்?",0]]);
-A(["தாமோதர்","கோசி","சட்லஜ்","மக
+A(["தாமோதர்","கோசி","சட்லஜ்","மகாநதி"],[["வங்காளத்தின் துக்கம் என்று அழைக்கப்படும் ஆறு?",0],["பீகாரின் துக்கம் என்று அழைக்கப்படும் ஆறு?",1],["மானசரோவர் ஏரிப் பகுதியில் உற்பத்தியாகும் ஆறு?",2],["ஹிராகுட் அணை அமைந்துள்ள ஆறு?",3]]);
+
+/* ============================================================
+   APP — views, exam engine, storage, PWA glue
+   ============================================================ */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+const pad=n=>String(n).padStart(2,"0");
+const fmt=s=>pad(Math.floor(s/60))+":"+pad(s%60);
+const today=()=>new Date().toLocaleDateString("en-CA");
+const tdate=()=>new Date().toLocaleDateString("ta-IN",{day:"numeric",month:"long",year:"numeric"});
+
+/* ---- state ---- */
+const K="tnpsc-v2";
+let D={};
+try{D=JSON.parse(localStorage.getItem(K))||{}}catch(e){D={}}
+D.theme=D.theme||"system";
+D.hist=Array.isArray(D.hist)?D.hist:[];
+D.custom=Array.isArray(D.custom)?D.custom:[];
+D.daily=D.daily||null;
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(D))}catch(e){}};
+const ALL=()=>BANK.concat(D.custom);
+
+let SS=null,RT="home",RA="last",LAST=null;
+
+/* ---- icons (inline SVG, no emoji) ---- */
+const IC={
+logo:'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#062018" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16.5 9"/></svg>',
+home:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>',
+test:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>',
+hist:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20v-9M10 20V4M16 20v-6M21 20H3"/></svg>',
+set:'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"/></svg>',
+target:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
+bolt:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/></svg>',
+cal:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+rev:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>',
+print:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8V3h10v5"/><rect x="3" y="8" width="18" height="9" rx="2"/><path d="M7 14h10v7H7z"/></svg>',
+imp:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 21h16"/></svg>',
+exp:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M4 3h16"/></svg>'
+};
+
+const MODES={mock:"CBT முழுத் தேர்வு",quick:"விரைவுப் பயிற்சி",daily:"தினசரி வினா",revise:"புத்திசாலி மீட்டல்"};
+const NAV={home:"home",tests:"tests",exam:"tests",result:"tests",review:"tests",paper:"tests",hist:"hist",set:"set"};
+
+function applyTheme(){
+  const r=document.documentElement;
+  if(D.theme==="dark")r.dataset.theme="dark";
+  else if(D.theme==="light")r.dataset.theme="light";
+  else r.removeAttribute("data-theme");
+}
+
+/* ---- shared chrome ---- */
+function hd(){
+  const nb=(r,t)=>`<button class="${NAV[RT]===r?"p":""}" onclick="go('${r}')">${t}</button>`;
+  return `<div class="hd"><div class="logo"><i>${IC.logo}</i>TNPSC Prep</div><div class="nav">${nb("home","முகப்பு")}${nb("tests","தேர்வு")}${nb("hist","வரலாறு")}${nb("set","அமைப்புகள்")}</div></div>`;
+}
+const act=(ic,t,d,fn)=>`<button class="act" onclick="${fn}"><b>${ic} ${t}</b><span>${d}</span></button>`;
+const dailyDesc=()=>(D.daily&&D.daily.d===today())?`இன்று முடிந்தது · ${D.daily.ok}/${D.daily.tot} சரி`:"தினமும் புதிய 10 கேள்விகள்";
+
+/* ---- views ---- */
+function vHome(){
+  const h=D.hist,tq=h.reduce((s,x)=>s+x.tot,0),ok=h.reduce((s,x)=>s+x.ok,0),acc=tq?Math.round(ok*100/tq):0;
+  return hd()+`
+  <div class="card ctr"><div class="row" style="justify-content:center;gap:8px"><span class="pill">${tdate()}</span><span class="pill">${ALL().length} கேள்விகள்</span></div>
+  <h2 style="margin:12px 0 0">வணக்கம்!</h2><p class="tin" style="margin:4px 0 0">TNPSC CBT பயிற்சிக்கான துணை – ஆஃப்லைனிலும் இயங்கும்.</p></div>
+  <div class="stats">
+    <div>தேர்வுகள்<b>${h.length}</b></div>
+    <div>கேள்விகள்<b>${tq}</b></div>
+    <div>சரியானவை<b class="ok">${ok}</b></div>
+    <div>துல்லியம்<b>${acc}%</b></div>
+  </div>
+  <div class="g">
+    ${act(IC.target,"CBT முழுத் தேர்வு","25 கேள்விகள் · 25 நிமிடங்கள் · உண்மைத் தேர்வு முறை","startMock()")}
+    ${act(IC.bolt,"விரைவுப் பயிற்சி","10 கேள்விகள் · நேர வரம்பு இல்லை","startQuick()")}
+    ${act(IC.cal,"தினசரி வினா",dailyDesc(),"startDaily()")}
+    ${act(IC.rev,"புத்திசாலி மீட்டல்","நீங்கள் தவறாக விடையளித்த கேள்விகள் மட்டும்","startRevise()")}
+    ${act(IC.print,"வினாத்தாள் அச்சிடு","ஆஃப்லைன் பயிற்சிக்கு வினாத்தாளை அச்சிடுங்கள்","go('paper')")}
+    ${act(IC.imp,"வினா இறக்குமதி","உங்கள் JSON வினா வங்கியைச் சேர்க்குங்கள்","pickFile()")}
+  </div>`;
+}
+
+function vTests(){
+  return hd()+`
+  <div class="card"><div class="row sp"><h3 style="margin:0">தேர்வைத் தொடங்குங்கள்</h3><span class="pill">${ALL().length} கேள்விகள்</span></div></div>
+  <div class="g">
+    ${act(IC.target,"CBT முழுத் தேர்வு","25 கேள்விகள் · 25 நிமிடங்கள் · உண்மைத் தேர்வு முறை","startMock()")}
+    ${act(IC.bolt,"விரைவுப் பயிற்சி","10 கேள்விகள் · நேர வரம்பு இல்லை","startQuick()")}
+    ${act(IC.cal,"தினசரி வினா",dailyDesc(),"startDaily()")}
+    ${act(IC.rev,"புத்திசாலி மீட்டல்","தவறான விடைகளிலிருந்து பயிற்சி","startRevise()")}
+  </div>`;
+}
+
+function vExam(){
+  const n=SS.qs.length,q=SS.qs[SS.cur];
+  const opts=q.o.map((t,i)=>`<button class="o${SS.ans[SS.cur]===i?" sel":""}" onclick="pick(${i})"><i>${i+1}</i><span>${esc(t)}</span></button>`).join("");
+  const top=`<div class="row sp"><span class="pill">${MODES[SS.mode]}</span><span class="row" style="gap:8px"><span class="pill">${SS.cur+1} / ${n}</span>${SS.mode==="mock"?`<span class="pill" id="tm">${fmt(Math.max(0,SS.left))}</span>`:""}</span></div>`;
+  const nav=`<div class="row mt">
+    <button onclick="mv(-1)"${SS.cur===0?" disabled":""}>&larr; முந்தையது</button>
+    <button class="ghost" onclick="mark()">${SS.mk[SS.cur]?"குறி நீக்கு":"குறியிடு"}</button>
+    ${SS.cur===n-1?`<button class="p" onclick="submit()">&#10003; சமர்ப்பி</button>`:`<button class="p" onclick="mv(1)">அடுத்தது &rarr;</button>`}
+  </div>`;
+  const kbd=`<div class="tin noprint" style="margin-top:12px"><span class="kbd">1–4</span> விடை · <span class="kbd">&larr; &rarr;</span> நகர்வு · <span class="kbd">M</span> குறி · <span class="kbd">Enter</span> அடுத்து</div>`;
+  if(SS.mode!=="mock"){
+    return hd()+`<div class="card">${top}<div class="q">${SS.cur+1}. ${esc(q.q)}</div>${opts}${nav}${kbd}
+    <button class="p w" onclick="submit()">தேர்வை சமர்ப்பி (${cntAns()}/${n})</button></div>`;
+  }
+  const pal=SS.qs.map((_,i)=>{
+    const an=SS.ans[i]!=null,m=SS.mk[i],cls=an&&m?"am":an?"a":m?"m":"u";
+    return `<button class="${cls}${i===SS.cur?" cur":""}" onclick="jump(${i})">${i+1}</button>`;
+  }).join("");
+  return hd()+`<div class="ex"><div class="card">${top}<div class="q">${SS.cur+1}. ${esc(q.q)}</div>${opts}${nav}${kbd}</div>
+  <div><div class="card"><b>கேள்வி அட்டவணை</b><div class="pal">${pal}</div>
+  <div class="tin"><span style="color:var(--ok)">&#9679;</span> பதிலளித்தது ${cntAns()} · <span style="color:var(--mk)">&#9679;</span> குறித்தது ${SS.mk.filter(Boolean).length} · <span style="color:var(--no)">&#9679;</span> மீதம் ${n-cntAns()}</div>
+  <button class="p w" onclick="submit()">தேர்வை சமர்ப்பி</button></div></div></div>`;
+}
+
+function vResult(){
+  const r=LAST;if(!r)return vHome();
+  const pct=r.tot?Math.round(r.ok*100/r.tot):0;
+  const skip=r.det.filter(d=>d[1]==null).length,wrong=r.tot-r.ok-skip;
+  return hd()+`<div class="card ctr"><span class="pill">${MODES[r.m]}</span>
+  <div class="ring" style="--p:${pct}"><b>${pct}<span style="font-size:1rem">%</span></b></div>
+  <p style="margin:0;font-size:1.05rem"><b>${r.ok}</b> / ${r.tot} சரியான விடைகள்</p>
+  <p style="margin:8px 0 0"><span class="pill${pct>=60?"":" warn"}">${pct>=60?"வெற்றி – நன்று!":"மேலும் பயிற்சி தேவை"}</span></p>
+  <div class="stats"><div>சரி<b class="ok">${r.ok}</b></div><div>தவறு<b class="no">${wrong}</b></div><div>விடப்பட்டவை<b>${skip}</b></div><div>நேரம்<b>${fmt(r.u)}</b></div></div>
+  <div class="row" style="justify-content:center"><button onclick="openRev('last')">மறுபரிசீலனை</button><button class="p" onclick="go('home')">முகப்பு</button></div></div>`;
+}
+
+function curRev(){return RA==="last"?LAST:D.hist[RA]}
+function vReview(){
+  const r=curRev();if(!r)return vHome();
+  const items=r.det.map((d,i)=>{
+    const ok=d[1]===d[2];
+    const lines=(d[3]||[]).map((t,j)=>{
+      const good=j===d[2],mine=j===d[1];
+      const st=good?"color:var(--ok);font-weight:700":mine?"color:var(--no);font-weight:700":"";
+      const tag=good?" – சரியான விடை":mine?" – உங்கள் விடை":"";
+      return `<div class="tin" style="${st}">${j+1}. ${esc(t)}${tag}</div>`;
+    }).join("");
+    return `<div class="rv ${ok?"c":"x"} card" style="margin:0 0 12px">
+    <div class="tin">கேள்வி ${i+1} · ${ok?"சரியான விடை":"தவறான விடை"}</div>
+    <div class="q" style="font-size:1.02rem;margin:6px 0 10px">${esc(d[0])}</div>
+    ${lines}
+    ${d[4]?`<div class="ex-t">${esc(d[4])}</div>`:""}
+    </div>`;
+  }).join("");
+  return hd()+`<div class="card noprint"><div class="row sp"><span class="pill">${MODES[r.m]} · மறுபரிசீலனை</span>
+  <span class="row"><button onclick="printNow()">${IC.print} அச்சிடு</button><button class="p" onclick="go('home')">முகப்பு</button></span></div></div>${items}`;
+}
+
+function vHist(){
+  const rows=D.hist.map((h,i)=>`<tr><td>${new Date(h.t).toLocaleDateString("ta-IN",{day:"numeric",month:"short"})}</td><td>${MODES[h.m]||h.m}</td><td>${h.ok} / ${h.tot}</td><td>${Math.round(h.ok*100/h.tot)}%</td><td><button onclick="openRev(${i})" style="padding:6px 12px;font-size:.85rem">பார்</button></td></tr>`).join("");
+  return hd()+`<div class="card"><div class="row sp"><h3 style="margin:0">தேர்வு வரலாறு</h3><span class="pill">${D.hist.length} முயற்சிகள்</span></div>
+  ${D.hist.length?`<table style="margin-top:10px"><tr><th>தேதி</th><th>வகை</th><th>மதிப்பெண்</th><th>%</th><th></th></tr>${rows}</table>`:`<p class="tin" style="margin:10px 0 0">இன்னும் தேர்வு எழுதப்படவில்லை. முகப்புப் பக்கத்திலிருந்து ஒரு தேர்வைத் தொடங்குங்கள்.</p>`}</div>`;
+}
+
+function vSet(){
+  return hd()+`
+  <div class="card"><h3 style="margin:0 0 4px">தோற்றம்</h3>
+  <label>நிறத் தோற்றம்</label>
+  <select onchange="setTheme(this.value)">
+    <option value="system"${D.theme==="system"?" selected":""}>அமைப்பு முறைமையைப் பின்பற்று</option>
+    <option value="light"${D.theme==="light"?" selected":""}>ஒளி</option>
+    <option value="dark"${D.theme==="dark"?" selected":""}>இருள்</option>
+  </select></div>
+  <div class="card"><h3 style="margin:0 0 4px">வினா வங்கி</h3>
+  <p class="tin" style="margin:4px 0 10px">அடிப்படை ${BANK.length} · நீங்கள் சேர்த்தவை ${D.custom.length} · மொத்தம் ${ALL().length}</p>
+  <div class="row">
+    <button onclick="pickFile()">${IC.imp} இறக்குமதி</button>
+    <button onclick="exportQ()">${IC.exp} ஏற்றுமதி</button>
+    <button class="ghost" style="color:var(--no)" onclick="wipe()">அனைத்துத் தரவையும் அழி</button>
+  </div>
+  <p class="tin" style="margin:10px 0 0">இறக்குமதி வடிவம்: <span class="kbd">[{"q":"...","o":["...","..."],"a":0}]</span> – <span class="kbd">e</span> என்ற புலத்தில் விளக்கம் தரலாம்.</p></div>
+  <div class="card"><h3 style="margin:0 0 4px">பற்றி</h3><p class="tin" style="margin:4px 0 0">TNPSC Prep – CBT Mock Tests · பதிப்பு tnpsc-v2 · ஆஃப்லைன் PWA. உங்கள் தரவு அனைத்தும் சாதனத்திலேயே சேமிக்கப்படும்.</p></div>`;
+}
+
+function vPaper(){
+  const qs=shuf(ALL()).slice(0,25);
+  const items=qs.map((q,i)=>`<div class="rv card" style="margin:0 0 12px"><div class="q" style="font-size:1.05rem;margin:0 0 8px">${i+1}. ${esc(q.q)}</div>
+  ${q.o.map((t,j)=>`<div class="tin">(${j+1}) ${esc(t)}</div>`).join("")}</div>`).join("");
+  return hd()+`<div class="card ctr noprint"><span class="pill">பயிற்சி வினாத்தாள் · ${qs.length} கேள்விகள்</span>
+  <p class="tin" style="margin:8px 0 0">விடைகள் அச்சிடப்படாது. மதிப்பீட்டுக்கு முகப்பில் உள்ள தேர்வுகளை எழுதுங்கள்.</p>
+  <button class="p" style="margin-top:10px" onclick="printNow()">${IC.print} அச்சிடு</button></div>${items}`;
+}
+
+/* ---- exam engine ---- */
+function begin(mode,n,dur,pool){
+  const src=pool||ALL();
+  const qs=shuf(src).slice(0,Math.min(n,src.length));
+  SS={mode,qs,ans:qs.map(()=>null),mk:qs.map(()=>false),cur:0,t0:Date.now(),dur:dur||0,left:dur||0,iv:null};
+  if(dur)SS.iv=setInterval(tick,1000);
+  RT="exam";render();
+}
+function tick(){
+  if(!SS)return;
+  SS.left--;
+  const t=document.getElementById("tm");
+  if(t){t.textContent=fmt(Math.max(0,SS.left));if(SS.left<=60)t.classList.add("warn")}
+  if(SS.left<=0){toast("நேரம் முடிந்தது – தேர்வு தானாக சமர்ப்பிக்கப்படுகிறது");submit(true)}
+}
+function pick(i){if(!SS)return;SS.ans[SS.cur]=SS.ans[SS.cur]===i?null:i;render()}
+function jump(i){if(!SS)return;SS.cur=i;render()}
+function mv(d){if(!SS)return;SS.cur=Math.max(0,Math.min(SS.qs.length-1,SS.cur+d));render()}
+function mark(){if(!SS)return;SS.mk[SS.cur]=!SS.mk[SS.cur];render()}
+function cntAns(){return SS?SS.ans.filter(x=>x!=null).length:0}
+function submit(auto){
+  if(!SS)return;
+  if(!auto&&!confirm("தேர்வை சமர்ப்பிக்கவா?"))return;
+  clearInterval(SS.iv);
+  const ok=SS.qs.reduce((s,q,i)=>s+(SS.ans[i]===q.a?1:0),0);
+  const u=SS.mode==="mock"?Math.max(1,SS.dur-SS.left):Math.max(1,Math.round((Date.now()-SS.t0)/1000));
+  const det=SS.qs.map((q,i)=>[q.q,SS.ans[i],q.a,q.o.slice(),q.e||""]);
+  LAST={m:SS.mode,t:Date.now(),tot:SS.qs.length,ok,u,det};
+  D.hist.push(LAST);
+  if(SS.mode==="daily")D.daily={d:today(),ok:LAST.ok,tot:LAST.tot};
+  save();SS=null;RA="last";RT="result";render();
+}
+
+/* ---- navigation ---- */
+function go(r){
+  if(SS){
+    if(r==="tests"){if(RT!=="exam"){RT="exam";render()}return}
+    if(RT==="exam"&&!confirm("நடந்து கொண்டிருக்கும் தேர்வை நிறுத்தவா?"))return;
+    clearInterval(SS.iv);SS=null;
+  }
+  RT=r;render();
+}
+function openRev(i){RA=i;RT="review";render()}
+function startMock(){begin("mock",25,25*60)}
+function startQuick(){begin("quick",10,0)}
+function startDaily(){
+  if(D.daily&&D.daily.d===today()){toast("இன்றைய தினசரி வினா முடிந்தது – நாளை மீண்டும் வருங்கள்!");return}
+  begin("daily",10,0);
+}
+function startRevise(){
+  const w=new Map();
+  D.hist.forEach(h=>h.det.forEach(d=>{if(d[1]!==d[2])w.set(d[0],d)}));
+  if(w.size<5){toast("மீட்டலுக்குப் போதுமான தவறான விடைகள் இல்லை");return}
+  const pool=[...w.values()].map(d=>{const s=ALL().find(x=>x.q===d[0]);return s||{q:d[0],o:d[3],a:d[2],e:d[4]}});
+  begin("revise",Math.min(15,pool.length),0,pool);
+}
+
+/* ---- settings actions ---- */
+function setTheme(v){D.theme=v;save();applyTheme();render()}
+function pickFile(){$("#fi").click()}
+function printNow(){window.print()}
+function exportQ(){
+  if(!D.custom.length){toast("சேர்க்கப்பட்ட கேள்விகள் இல்லை");return}
+  const b=new Blob([JSON.stringify({app:"tnpsc-prep",questions:D.custom},null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="tnpsc-questions.json";a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),500);
+}
+function wipe(){
+  if(!confirm("வரலாறு, தினசரி வினா மற்றும் சேர்த்த கேள்விகள் அனைத்தும் நீக்கப்படும். தொடரவா?"))return;
+  D.hist=[];D.custom=[];D.daily=null;LAST=null;save();
+  toast("அனைத்துத் தரவும் அழிக்கப்பட்டது");render();
+}
+
+/* ---- toast ---- */
+let TT=null;
+function toast(m){
+  let t=document.getElementById("toast");
+  if(!t){
+    t=document.createElement("div");t.id="toast";t.className="noprint";
+    t.style.cssText="position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:12px;font-size:.9rem;z-index:99;box-shadow:var(--sh);max-width:88vw;text-align:center;transition:opacity .3s;opacity:0";
+    document.body.appendChild(t);
+  }
+  t.textContent=m;t.style.opacity="1";clearTimeout(TT);TT=setTimeout(()=>t.style.opacity="0",2600);
+}
+
+/* ---- import / validate ---- */
+function normQ(x){
+  if(!x||typeof x!=="object")return null;
+  const q=String(x.q!=null?x.q:(x.question!=null?x.question:"")).trim();
+  const o=Array.isArray(x.o)?x.o:(Array.isArray(x.options)?x.options:null);
+  if(!q||!o||o.length<2||o.length>6)return null;
+  const os=o.map(v=>String(v));
+  const a=Number(x.a!=null?x.a:x.answer);
+  if(!Number.isInteger(a)||a<0||a>=os.length)return null;
+  return {q,o:os,a,e:x.e?String(x.e):""};
+}
+$("#fi").addEventListener("change",async e=>{
+  const f=e.target.files&&e.target.files[0];e.target.value="";
+  if(!f)return;
+  let j;try{j=JSON.parse(await f.text())}catch(err){toast("தவறான JSON கோப்பு");return}
+  const arr=Array.isArray(j)?j:(j&&Array.isArray(j.questions)?j.questions:null);
+  if(!arr){toast('எதிர்பார்க்கும் வடிவம்: [{"q","o","a"}]');return}
+  let ok=0,bad=0;const have=new Set(ALL().map(x=>x.q));
+  arr.forEach(x=>{const n=normQ(x);if(n&&!have.has(n.q)){D.custom.push(n);have.add(n.q);ok++}else bad++});
+  save();toast(ok+" கேள்விகள் சேர்க்கப்பட்டன"+(bad?", "+bad+" நிராகரிக்கப்பட்டன":""));
+  if(RT!=="exam")render();
+});
+
+/* ---- keyboard shortcuts ---- */
+addEventListener("keydown",e=>{
+  if(RT!=="exam"||!SS)return;
+  const tg=e.target&&e.target.tagName;
+  if(tg==="INPUT"||tg==="SELECT"||tg==="TEXTAREA")return;
+  if(/^[1-4]$/.test(e.key))pick(+e.key-1);
+  else if(e.key==="ArrowRight")mv(1);
+  else if(e.key==="ArrowLeft")mv(-1);
+  else if(e.key==="m"||e.key==="M")mark();
+  else if(e.key==="Enter"){if(SS.cur<SS.qs.length-1)mv(1);else submit()}
+});
+
+/* ---- render + boot ---- */
+const TABS=[["home","முகப்பு",IC.home],["tests","தேர்வு",IC.test],["hist","வரலாறு",IC.hist],["set","அமைப்பு",IC.set]];
+function renderTabs(){
+  $("#tabs").innerHTML=TABS.map(t=>`<button class="${NAV[RT]===t[0]?"p":""}" onclick="go('${t[0]}')">${t[2]}<span>${t[1]}</span></button>`).join("");
+}
+const V={home:vHome,tests:vTests,exam:vExam,result:vResult,review:vReview,hist:vHist,set:vSet,paper:vPaper};
+function render(){
+  if(RT==="exam"&&!SS)RT="tests";
+  if(RT==="result"&&!LAST)RT="home";
+  if(RT==="review"&&!curRev())RT="hist";
+  $("#app").innerHTML=(V[RT]||vHome)();
+  renderTabs();
+  window.scrollTo(0,0);
+}
+applyTheme();render();
+if("serviceWorker"in navigator){addEventListener("load",()=>{navigator.serviceWorker.register("./sw.js").catch(()=>{})})}
+</script>
+</body>
+</html>
